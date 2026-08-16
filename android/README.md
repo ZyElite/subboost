@@ -16,7 +16,7 @@ SubBoost Android 是仓库内独立的原生 Android 客户端。它在设备本
 - 自定义基础与 DNS YAML
 - 完整模板 JSON 导入导出，设置自动保存在设备上
 - 按需启动带随机令牌的局域网 `config.yaml` HTTP 链接
-- 复制、分享或通过 Android 文件选择器保存生成结果
+- 复制、创建局域网导入链接或通过 Android 文件选择器保存生成结果
 
 本应用只生成配置，不内置代理内核，也不会启动 VPN。订阅凭据不会上传；网络导入只允许 HTTPS。
 
@@ -46,9 +46,9 @@ company|domain|geosite/company.mrs|DIRECT
 
 模板 JSON 的 schema 是 `subboost-android-config/v1`。导出的 JSON 包含所有模板和高级设置，但不包含订阅正文或节点密码。
 
-## 局域网本地链接
+## 局域网导入链接
 
-生成 YAML 后，在主界面的 **局域网本地链接** 区域选择 **启动/更新链接**。应用会显示类似下面的地址：
+生成 YAML 后，选择结果下方的 **创建导入链接**，应用会启动本地 HTTP 服务、复制链接，并在 **局域网导入链接** 区域显示类似下面的地址：
 
 ```text
 http://192.168.1.20:17890/config.yaml?token=随机访问令牌

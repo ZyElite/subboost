@@ -5,7 +5,9 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Build;
@@ -65,6 +67,8 @@ public final class MainActivity extends Activity {
     private ProgressBar progress;
     private Button fetchButton;
     private TextView localShareLink;
+    private TextView templateModeSummary;
+    private final List<Button> templateModeButtons = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -88,6 +92,7 @@ public final class MainActivity extends Activity {
             }
             if (!isBlank(sourceInput.getText().toString())) parseSource(false);
         }
+        refreshTemplateModeUi();
     }
 
     private View buildUi() {
@@ -113,37 +118,23 @@ public final class MainActivity extends Activity {
         content.addView(intro, matchWrap());
 
         content.addView(section("1. 导入订阅"), topMargin(22));
-        urlInput = edit("HTTPS 订阅地址（每行一个，可聚合多个来源）", true, dp(88));
+        urlInput = edit("HTTPS 订阅地址（每行一个，可聚合多个来源）", true, dp(96));
         urlInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        content.addView(urlInput, matchWrap());
+        configureInnerScrolling(urlInput, false);
+        content.addView(urlInput, fixedHeight(96));
 
         fetchButton = button("获取订阅", this::fetchSubscription);
         content.addView(fetchButton, topMargin(8));
 
-        sourceInput = edit("粘贴节点链接、Base64 订阅，或 Clash YAML", true, dp(190));
-        sourceInput.setGravity(Gravity.TOP | Gravity.START);
-        content.addView(sourceInput, topMargin(12));
+        sourceInput = edit("粘贴节点链接、Base64 订阅，或 Clash YAML", true, dp(160));
+        configureInnerScrolling(sourceInput, true);
+        content.addView(sourceInput, fixedHeightTopMargin(160, 12));
 
         content.addView(buttonRow(Arrays.asList(
                 button("打开文件", view -> openFile()),
                 button("解析节点", view -> parseSource(true)),
                 button("清空", view -> clearAll())
         )), topMargin(8));
-
-        content.addView(section("3. 局域网本地链接"), topMargin(22));
-        TextView shareHint = text("启动后，局域网内的 Mihomo 客户端或其他应用可通过带令牌的 HTTP 链接获取当前 YAML。请勿把链接发给不可信的人，并保持 SubBoost 进程存活。", 13);
-        shareHint.setLineSpacing(0, 1.15f);
-        content.addView(shareHint, matchWrap());
-        localShareLink = text("服务未启动", 13);
-        localShareLink.setTextIsSelectable(true);
-        localShareLink.setTypeface(android.graphics.Typeface.MONOSPACE);
-        content.addView(localShareLink, topMargin(8));
-        content.addView(buttonRow(Arrays.asList(
-                button("启动/更新链接", view -> startLocalShare()),
-                button("复制链接", view -> copyLocalShareLink()),
-                button("更换令牌", view -> rotateLocalShareToken()),
-                button("停止", view -> stopLocalShare())
-        )), topMargin(6));
 
         LinearLayout resultHeader = horizontal();
         status = text("等待导入", 14);
@@ -159,27 +150,95 @@ public final class MainActivity extends Activity {
         content.addView(nodePreview, matchWrap());
 
         content.addView(section("2. 生成配置"), topMargin(18));
-        TextView hint = text("可选择精简、标准、完整模板；高级模式支持筛选、规则集、链式代理和监听端口。输出可继续手工编辑。", 13);
-        content.addView(hint, matchWrap());
-        content.addView(button("模板与高级模式", view -> openAdvancedSettings()), topMargin(8));
+        content.addView(text("默认模式", 14), topMargin(8));
+        LinearLayout templateModes = horizontal();
+        templateModes.addView(templateModeButton("精简版", "minimal"), weightedButton(0));
+        templateModes.addView(templateModeButton("标准版", "standard"), weightedButton(6));
+        templateModes.addView(templateModeButton("完整版", "full"), weightedButton(6));
+        content.addView(templateModes, topMargin(6));
+        templateModeSummary = text("", 13);
+        content.addView(templateModeSummary, topMargin(5));
+        content.addView(button("高级设置", view -> openAdvancedSettings()), topMargin(8));
         content.addView(button("生成 Mihomo YAML", view -> generateConfig()), topMargin(8));
 
-        outputInput = edit("生成的 config.yaml 会显示在这里", true, dp(300));
-        outputInput.setGravity(Gravity.TOP | Gravity.START);
-        outputInput.setHorizontallyScrolling(true);
+        outputInput = edit("生成的 config.yaml 会显示在这里", true, dp(240));
+        configureInnerScrolling(outputInput, true);
         outputInput.setTextSize(12);
         outputInput.setTypeface(android.graphics.Typeface.MONOSPACE);
-        content.addView(outputInput, topMargin(12));
+        content.addView(outputInput, fixedHeightTopMargin(240, 12));
 
         content.addView(buttonRow(Arrays.asList(
                 button("复制", view -> copyOutput()),
-                button("分享", view -> shareOutput()),
+                button("创建导入链接", view -> startLocalShare(true)),
                 button("保存文件", view -> saveOutput())
         )), topMargin(8));
 
+        content.addView(section("3. 局域网导入链接"), topMargin(22));
+        TextView shareHint = text("启动后，局域网内的 Mihomo 客户端或其他 App 可通过带令牌的 HTTP 链接导入当前 YAML。请勿把链接发给不可信的人，并保持 SubBoost 进程存活。", 13);
+        shareHint.setLineSpacing(0, 1.15f);
+        content.addView(shareHint, matchWrap());
+        localShareLink = text("服务未启动", 13);
+        localShareLink.setTextIsSelectable(true);
+        localShareLink.setTypeface(android.graphics.Typeface.MONOSPACE);
+        content.addView(localShareLink, topMargin(8));
+        content.addView(buttonRow(Arrays.asList(
+                button("创建/更新链接", view -> startLocalShare(false)),
+                button("复制链接", view -> copyLocalShareLink()),
+                button("更换令牌", view -> rotateLocalShareToken()),
+                button("停止", view -> stopLocalShare())
+        )), topMargin(6));
+
         screen.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        refreshTemplateModeUi();
         refreshLocalShareUi();
         return screen;
+    }
+
+    private Button templateModeButton(String label, String template) {
+        Button button = button(label, view -> applyTemplateMode(template));
+        button.setTag(template);
+        button.setMinHeight(0);
+        button.setMinimumHeight(0);
+        button.setPadding(dp(10), 0, dp(10), 0);
+        templateModeButtons.add(button);
+        return button;
+    }
+
+    private void applyTemplateMode(String template) {
+        configOptions.applyTemplate(template);
+        getSharedPreferences("subboost-settings", MODE_PRIVATE)
+                .edit()
+                .putString("config", configOptions.toJson())
+                .apply();
+        outputInput.setText("");
+        status.setText("已切换为“" + templateName(template) + "”默认模式");
+        refreshTemplateModeUi();
+    }
+
+    private void refreshTemplateModeUi() {
+        boolean night = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+                == Configuration.UI_MODE_NIGHT_YES;
+        int selectedColor = Color.rgb(36, 84, 58);
+        int idleColor = night ? Color.rgb(48, 54, 50) : Color.rgb(235, 240, 236);
+        int idleTextColor = night ? Color.rgb(225, 232, 227) : selectedColor;
+        for (Button button : templateModeButtons) {
+            boolean selected = String.valueOf(button.getTag()).equals(configOptions.template);
+            GradientDrawable background = new GradientDrawable();
+            background.setColor(selected ? selectedColor : idleColor);
+            background.setCornerRadius(dp(6));
+            background.setStroke(dp(1), selected ? selectedColor : Color.rgb(153, 171, 159));
+            button.setBackground(background);
+            button.setTextColor(selected ? Color.WHITE : idleTextColor);
+            button.setTypeface(null, selected ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+            button.setSelected(selected);
+            button.setActivated(selected);
+            button.setContentDescription(button.getText() + (selected ? "，已选择" : ""));
+        }
+        if (templateModeSummary != null) {
+            int count = configOptions.enabledModules == null ? 0 : configOptions.enabledModules.size();
+            String advanced = configOptions.advancedMode ? " · 高级设置已启用" : "";
+            templateModeSummary.setText(templateName(configOptions.template) + " · " + count + " 个策略组" + advanced);
+        }
     }
 
     private void fetchSubscription(View ignored) {
@@ -303,6 +362,7 @@ public final class MainActivity extends Activity {
         try {
             String yaml = generator.generate(nodes, configOptions);
             outputInput.setText(yaml);
+            outputInput.setSelection(0);
             if (LocalConfigServer.get().isRunning()) LocalConfigServer.get().update(yaml);
             status.setText("配置已生成，共 " + nodes.size() + " 个节点");
             show("config.yaml 已生成");
@@ -346,6 +406,7 @@ public final class MainActivity extends Activity {
                 getSharedPreferences("subboost-settings", MODE_PRIVATE).edit().putString("config", configOptions.toJson()).apply();
                 outputInput.setText("");
                 status.setText("已应用“" + templateName(configOptions.template) + "”模板" + (configOptions.advancedMode ? "及高级模式" : ""));
+                refreshTemplateModeUi();
                 show("配置设置已应用");
                 refreshLocalShareUi();
             } catch (RuntimeException error) {
@@ -382,22 +443,13 @@ public final class MainActivity extends Activity {
         show("已复制到剪贴板");
     }
 
-    private void shareOutput() {
-        String value = outputInput.getText().toString();
-        if (isBlank(value)) { show("请先生成配置"); return; }
-        Intent intent = new Intent(Intent.ACTION_SEND);
-        intent.setType("text/yaml");
-        intent.putExtra(Intent.EXTRA_TEXT, value);
-        startActivity(Intent.createChooser(intent, "分享 Mihomo 配置"));
-    }
-
     private void openAdvancedSettings() {
         Intent intent = new Intent(this, AdvancedSettingsActivity.class);
         intent.putExtra(AdvancedSettingsActivity.EXTRA_CONFIG, configOptions.toJson());
         startActivityForResult(intent, REQUEST_ADVANCED);
     }
 
-    private void startLocalShare() {
+    private void startLocalShare(boolean copyLink) {
         String yaml = outputInput.getText().toString();
         if (isBlank(yaml)) { show("请先生成配置"); return; }
         try {
@@ -408,7 +460,18 @@ public final class MainActivity extends Activity {
             Intent service = new Intent(this, LocalShareService.class).setAction(LocalShareService.ACTION_START);
             startForegroundService(service);
             refreshLocalShareUi();
-            show("局域网链接已启动");
+            if (copyLink) {
+                String link = currentLocalShareLink();
+                if (isBlank(link)) {
+                    show("服务已启动，但未检测到局域网 IPv4 地址");
+                    return;
+                }
+                ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                clipboard.setPrimaryClip(ClipData.newPlainText("SubBoost 局域网导入链接", link));
+                show("导入链接已创建并复制");
+            } else {
+                show("局域网导入链接已启动");
+            }
         } catch (Exception error) {
             LocalConfigServer.get().stop();
             stopService(new Intent(this, LocalShareService.class));
@@ -554,6 +617,20 @@ public final class MainActivity extends Activity {
         return input;
     }
 
+    private void configureInnerScrolling(EditText input, boolean horizontal) {
+        input.setGravity(Gravity.TOP | Gravity.START);
+        input.setHorizontallyScrolling(horizontal);
+        input.setHorizontalScrollBarEnabled(horizontal);
+        input.setVerticalScrollBarEnabled(true);
+        input.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        input.setOnTouchListener((view, event) -> {
+            boolean touching = event.getActionMasked() != android.view.MotionEvent.ACTION_UP
+                    && event.getActionMasked() != android.view.MotionEvent.ACTION_CANCEL;
+            view.getParent().requestDisallowInterceptTouchEvent(touching);
+            return false;
+        });
+    }
+
     private Button button(String label, View.OnClickListener listener) {
         Button button = new Button(this);
         button.setText(label);
@@ -579,6 +656,22 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams params = matchWrap();
         params.topMargin = dp(value);
         return params;
+    }
+
+    private LinearLayout.LayoutParams weightedButton(int startMargin) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(44), 1);
+        params.leftMargin = dp(startMargin);
+        return params;
+    }
+
+    private LinearLayout.LayoutParams fixedHeightTopMargin(int height, int margin) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(height));
+        params.topMargin = dp(margin);
+        return params;
+    }
+
+    private LinearLayout.LayoutParams fixedHeight(int height) {
+        return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(height));
     }
 
     private int dp(int value) {

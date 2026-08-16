@@ -61,7 +61,7 @@ public final class LocalShareService extends Service {
         return new Notification.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.stat_sys_upload)
                 .setContentTitle("SubBoost 局域网链接运行中")
-                .setContentText("其他设备可获取当前 config.yaml")
+                .setContentText("其他 App 可通过链接导入当前 config.yaml")
                 .setContentIntent(openIntent)
                 .setOngoing(true)
                 .addAction(new Notification.Action.Builder(

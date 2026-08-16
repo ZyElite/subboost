@@ -23,7 +23,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
-/** Small token-protected HTTP server for sharing the generated YAML on the LAN. */
+/** Small token-protected HTTP server for importing the generated YAML over the LAN. */
 public final class LocalConfigServer {
     private static final LocalConfigServer INSTANCE = new LocalConfigServer();
     private final AtomicReference<String> yaml = new AtomicReference<>("");
@@ -35,7 +35,7 @@ public final class LocalConfigServer {
     public static LocalConfigServer get() { return INSTANCE; }
 
     public synchronized void start(int port, String content, String accessToken) throws IOException {
-        if (blank(content)) throw new IllegalArgumentException("没有可供分享的配置内容");
+        if (blank(content)) throw new IllegalArgumentException("没有可供导入的配置内容");
         if (blank(accessToken)) throw new IllegalArgumentException("访问令牌不能为空");
         if (serverSocket != null && !serverSocket.isClosed()) {
             if (serverSocket.getLocalPort() != port && port != 0) stop();

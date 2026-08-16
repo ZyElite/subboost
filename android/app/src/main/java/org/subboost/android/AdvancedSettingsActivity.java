@@ -133,7 +133,7 @@ public final class AdvancedSettingsActivity extends Activity {
         testUrl = field("策略组测速 URL", false, dp(52)); content.addView(testUrl, top(6));
         testInterval = field("测速间隔（秒）", false, dp(52)); testInterval.setInputType(InputType.TYPE_CLASS_NUMBER); content.addView(testInterval, top(6));
         ruleBaseUrl = field("远程规则集基础 URL", false, dp(52)); content.addView(ruleBaseUrl, top(6));
-        localSharePort = field("局域网本地链接端口（1024-65535）", false, dp(52));
+        localSharePort = field("局域网导入链接端口（1024-65535）", false, dp(52));
         localSharePort.setInputType(InputType.TYPE_CLASS_NUMBER); content.addView(localSharePort, top(6));
         cnNoResolve = check("国内 IP 规则使用 no-resolve"); content.addView(cnNoResolve, top(4));
         experimentalCn = check("额外启用 geosite/cn 规则集"); content.addView(experimentalCn, top(0));
