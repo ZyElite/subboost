@@ -5,6 +5,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
@@ -30,6 +31,7 @@ import org.subboost.android.core.ConfigOptions;
 import org.subboost.android.core.LocalConfigServer;
 import org.subboost.android.core.ParseResult;
 import org.subboost.android.core.SubscriptionParser;
+import org.subboost.android.core.WifiCallingAnalyzer;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -51,6 +53,8 @@ public final class MainActivity extends Activity {
     private static final int REQUEST_SAVE = 1002;
     private static final int REQUEST_ADVANCED = 1003;
     private static final int MAX_INPUT_BYTES = 8 * 1024 * 1024;
+    private static final String SETTINGS_NAME = "subboost-settings";
+    private static final String SHARE_TOKEN_KEY = "share-token";
 
     private final SubscriptionParser parser = new SubscriptionParser();
     private final ConfigGenerator generator = new ConfigGenerator();
@@ -64,17 +68,20 @@ public final class MainActivity extends Activity {
     private EditText outputInput;
     private TextView status;
     private TextView nodePreview;
+    private ScrollView nodePreviewScroll;
     private ProgressBar progress;
     private Button fetchButton;
     private TextView localShareLink;
     private TextView templateModeSummary;
+    private String localShareToken;
     private final List<Button> templateModeButtons = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        localShareToken = loadOrCreateLocalShareToken();
         if (savedInstanceState == null) {
-            String savedConfig = getSharedPreferences("subboost-settings", MODE_PRIVATE).getString("config", "");
+            String savedConfig = getSharedPreferences(SETTINGS_NAME, MODE_PRIVATE).getString("config", "");
             if (!savedConfig.isEmpty()) {
                 try { configOptions = ConfigOptions.fromJson(savedConfig); }
                 catch (RuntimeException ignored) { configOptions = new ConfigOptions(); }
@@ -113,11 +120,7 @@ public final class MainActivity extends Activity {
         content.setPadding(dp(18), dp(18), dp(18), dp(32));
         scroll.addView(content);
 
-        TextView intro = text("在设备上离线解析订阅并生成 Mihomo 配置。订阅内容只在你点击“获取”时从指定地址下载，不会上传到 SubBoost。", 15);
-        intro.setLineSpacing(0, 1.2f);
-        content.addView(intro, matchWrap());
-
-        content.addView(section("1. 导入订阅"), topMargin(22));
+        content.addView(section("1. 导入订阅"), topMargin(4));
         urlInput = edit("HTTPS 订阅地址（每行一个，可聚合多个来源）", true, dp(96));
         urlInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         configureInnerScrolling(urlInput, false);
@@ -147,7 +150,20 @@ public final class MainActivity extends Activity {
 
         nodePreview = text("", 13);
         nodePreview.setLineSpacing(0, 1.15f);
-        content.addView(nodePreview, matchWrap());
+        nodePreview.setTextIsSelectable(true);
+        nodePreview.setPadding(dp(10), dp(8), dp(10), dp(8));
+        nodePreviewScroll = new ScrollView(this);
+        nodePreviewScroll.setFillViewport(true);
+        nodePreviewScroll.setVerticalScrollBarEnabled(true);
+        nodePreviewScroll.setVisibility(View.GONE);
+        nodePreviewScroll.addView(nodePreview, matchWrap());
+        nodePreviewScroll.setOnTouchListener((view, event) -> {
+            boolean touching = event.getActionMasked() != android.view.MotionEvent.ACTION_UP
+                    && event.getActionMasked() != android.view.MotionEvent.ACTION_CANCEL;
+            view.getParent().requestDisallowInterceptTouchEvent(touching);
+            return false;
+        });
+        content.addView(nodePreviewScroll, fixedHeightTopMargin(132, 4));
 
         content.addView(section("2. 生成配置"), topMargin(18));
         content.addView(text("默认模式", 14), topMargin(8));
@@ -161,20 +177,19 @@ public final class MainActivity extends Activity {
         content.addView(button("高级设置", view -> openAdvancedSettings()), topMargin(8));
         content.addView(button("生成 Mihomo YAML", view -> generateConfig()), topMargin(8));
 
-        outputInput = edit("生成的 config.yaml 会显示在这里", true, dp(240));
+        outputInput = edit("生成的 config.yaml 会显示在这里", true, dp(190));
         configureInnerScrolling(outputInput, true);
         outputInput.setTextSize(12);
         outputInput.setTypeface(android.graphics.Typeface.MONOSPACE);
-        content.addView(outputInput, fixedHeightTopMargin(240, 12));
+        content.addView(outputInput, fixedHeightTopMargin(190, 12));
 
         content.addView(buttonRow(Arrays.asList(
                 button("复制", view -> copyOutput()),
-                button("创建导入链接", view -> startLocalShare(true)),
                 button("保存文件", view -> saveOutput())
         )), topMargin(8));
 
-        content.addView(section("3. 局域网导入链接"), topMargin(22));
-        TextView shareHint = text("启动后，局域网内的 Mihomo 客户端或其他 App 可通过带令牌的 HTTP 链接导入当前 YAML。请勿把链接发给不可信的人，并保持 SubBoost 进程存活。", 13);
+        content.addView(section("3. 局域网本地连接"), topMargin(22));
+        TextView shareHint = text("生成配置后，可启动带令牌的 HTTP 链接供局域网设备导入。令牌会保存在本机，重新打开 App、生成配置并启动连接后，原链接仍可继续使用。", 13);
         shareHint.setLineSpacing(0, 1.15f);
         content.addView(shareHint, matchWrap());
         localShareLink = text("服务未启动", 13);
@@ -182,13 +197,14 @@ public final class MainActivity extends Activity {
         localShareLink.setTypeface(android.graphics.Typeface.MONOSPACE);
         content.addView(localShareLink, topMargin(8));
         content.addView(buttonRow(Arrays.asList(
-                button("创建/更新链接", view -> startLocalShare(false)),
+                button("启动/更新连接", view -> startLocalShare()),
                 button("复制链接", view -> copyLocalShareLink()),
                 button("更换令牌", view -> rotateLocalShareToken()),
                 button("停止", view -> stopLocalShare())
         )), topMargin(6));
 
         screen.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        applySystemBarInsets(screen, toolbar, scroll);
         refreshTemplateModeUi();
         refreshLocalShareUi();
         return screen;
@@ -206,7 +222,7 @@ public final class MainActivity extends Activity {
 
     private void applyTemplateMode(String template) {
         configOptions.applyTemplate(template);
-        getSharedPreferences("subboost-settings", MODE_PRIVATE)
+        getSharedPreferences(SETTINGS_NAME, MODE_PRIVATE)
                 .edit()
                 .putString("config", configOptions.toJson())
                 .apply();
@@ -311,6 +327,7 @@ public final class MainActivity extends Activity {
             nodes = Collections.emptyList();
             status.setText("请先粘贴或导入订阅内容");
             nodePreview.setText("");
+            nodePreviewScroll.setVisibility(View.GONE);
             return;
         }
         ParseResult result = parser.parse(source);
@@ -330,15 +347,29 @@ public final class MainActivity extends Activity {
         status.setText(summary);
 
         List<String> lines = new ArrayList<>();
-        int shown = Math.min(nodes.size(), 12);
-        for (int i = 0; i < shown; i++) {
+        int ready = 0;
+        int unknown = 0;
+        int unsupported = 0;
+        for (Map<String, Object> node : nodes) {
+            WifiCallingAnalyzer.Status wifiStatus = WifiCallingAnalyzer.analyze(node).status;
+            if (wifiStatus == WifiCallingAnalyzer.Status.READY) ready++;
+            else if (wifiStatus == WifiCallingAnalyzer.Status.UNKNOWN) unknown++;
+            else unsupported++;
+        }
+        if (!nodes.isEmpty()) {
+            lines.add("WiFi Calling 配置分析：可尝试 " + ready + " · 待确认 " + unknown + " · 不支持 " + unsupported);
+            lines.add("判断条件：节点支持 UDP；出口 UDP 500/4500 仍需在代理客户端中实测。");
+        }
+        for (int i = 0; i < nodes.size(); i++) {
             Map<String, Object> node = nodes.get(i);
             String source = String.valueOf(node.getOrDefault("_subboost-source", "manual"));
-            lines.add("• " + node.get("name") + "  [" + node.get("type") + " · " + source + "]");
+            WifiCallingAnalyzer.Analysis wifi = WifiCallingAnalyzer.analyze(node);
+            lines.add("• " + node.get("name") + "  [" + node.get("type") + " · " + source + "]\n  WiFi Calling：" + wifi.message);
         }
-        if (nodes.size() > shown) lines.add("…还有 " + (nodes.size() - shown) + " 个节点");
         for (int i = 0; i < Math.min(errors.size(), 3); i++) lines.add("⚠ " + errors.get(i));
         nodePreview.setText(String.join("\n", lines));
+        nodePreviewScroll.setVisibility(lines.isEmpty() ? View.GONE : View.VISIBLE);
+        nodePreviewScroll.scrollTo(0, 0);
         if (notify) show(summary);
     }
 
@@ -403,7 +434,7 @@ public final class MainActivity extends Activity {
                     LocalConfigServer.get().stop();
                     stopService(new Intent(this, LocalShareService.class));
                 }
-                getSharedPreferences("subboost-settings", MODE_PRIVATE).edit().putString("config", configOptions.toJson()).apply();
+                getSharedPreferences(SETTINGS_NAME, MODE_PRIVATE).edit().putString("config", configOptions.toJson()).apply();
                 outputInput.setText("");
                 status.setText("已应用“" + templateName(configOptions.template) + "”模板" + (configOptions.advancedMode ? "及高级模式" : ""));
                 refreshTemplateModeUi();
@@ -449,7 +480,7 @@ public final class MainActivity extends Activity {
         startActivityForResult(intent, REQUEST_ADVANCED);
     }
 
-    private void startLocalShare(boolean copyLink) {
+    private void startLocalShare() {
         String yaml = outputInput.getText().toString();
         if (isBlank(yaml)) { show("请先生成配置"); return; }
         try {
@@ -460,18 +491,7 @@ public final class MainActivity extends Activity {
             Intent service = new Intent(this, LocalShareService.class).setAction(LocalShareService.ACTION_START);
             startForegroundService(service);
             refreshLocalShareUi();
-            if (copyLink) {
-                String link = currentLocalShareLink();
-                if (isBlank(link)) {
-                    show("服务已启动，但未检测到局域网 IPv4 地址");
-                    return;
-                }
-                ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                clipboard.setPrimaryClip(ClipData.newPlainText("SubBoost 局域网导入链接", link));
-                show("导入链接已创建并复制");
-            } else {
-                show("局域网导入链接已启动");
-            }
+            show("局域网本地连接已启动");
         } catch (Exception error) {
             LocalConfigServer.get().stop();
             stopService(new Intent(this, LocalShareService.class));
@@ -496,7 +516,8 @@ public final class MainActivity extends Activity {
 
     private void rotateLocalShareToken() {
         String token = LocalConfigServer.newToken();
-        getSharedPreferences("subboost-settings", MODE_PRIVATE).edit().putString("share-token", token).apply();
+        getSharedPreferences(SETTINGS_NAME, MODE_PRIVATE).edit().putString(SHARE_TOKEN_KEY, token).commit();
+        localShareToken = token;
         if (LocalConfigServer.get().isRunning()) {
             try { LocalConfigServer.get().start(LocalConfigServer.get().port(), outputInput.getText().toString(), token); }
             catch (Exception error) { show("更换令牌失败：" + message(error)); return; }
@@ -506,10 +527,15 @@ public final class MainActivity extends Activity {
     }
 
     private String localShareToken() {
-        String token = getSharedPreferences("subboost-settings", MODE_PRIVATE).getString("share-token", "");
+        return localShareToken;
+    }
+
+    private String loadOrCreateLocalShareToken() {
+        SharedPreferences settings = getSharedPreferences(SETTINGS_NAME, MODE_PRIVATE);
+        String token = settings.getString(SHARE_TOKEN_KEY, "");
         if (isBlank(token)) {
             token = LocalConfigServer.newToken();
-            getSharedPreferences("subboost-settings", MODE_PRIVATE).edit().putString("share-token", token).apply();
+            settings.edit().putString(SHARE_TOKEN_KEY, token).commit();
         }
         return token;
     }
@@ -529,13 +555,14 @@ public final class MainActivity extends Activity {
         }
         String link = currentLocalShareLink();
         if (isBlank(link)) localShareLink.setText("服务已启动，但未检测到可用的局域网 IPv4 地址");
-        else localShareLink.setText(link + "\n仅在当前设备与局域网可达，应用进程结束后失效");
+        else localShareLink.setText(link + "\n令牌已保存在本机；重新启动连接后可继续使用此链接");
     }
 
     private void clearAll() {
         sourceInput.setText("");
         outputInput.setText("");
         nodePreview.setText("");
+        nodePreviewScroll.setVisibility(View.GONE);
         status.setText("等待导入");
         nodes = Collections.emptyList();
     }
@@ -628,6 +655,19 @@ public final class MainActivity extends Activity {
                     && event.getActionMasked() != android.view.MotionEvent.ACTION_CANCEL;
             view.getParent().requestDisallowInterceptTouchEvent(touching);
             return false;
+        });
+    }
+
+    private void applySystemBarInsets(LinearLayout screen, TextView toolbar, ScrollView scroll) {
+        screen.setOnApplyWindowInsetsListener((view, insets) -> {
+            int top = insets.getSystemWindowInsetTop();
+            int bottom = insets.getSystemWindowInsetBottom();
+            toolbar.setPadding(dp(20), top, dp(20), 0);
+            ViewGroup.LayoutParams toolbarParams = toolbar.getLayoutParams();
+            toolbarParams.height = dp(64) + top;
+            toolbar.setLayoutParams(toolbarParams);
+            scroll.setPadding(0, 0, 0, bottom);
+            return insets;
         });
     }
 

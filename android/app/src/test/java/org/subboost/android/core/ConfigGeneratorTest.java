@@ -48,7 +48,7 @@ public class ConfigGeneratorTest {
         ConfigOptions.GroupAdvanced advanced = new ConfigOptions.GroupAdvanced();
         advanced.groupType = "load-balance";
         advanced.strategy = "round-robin";
-        advanced.regions = List.of("hk");
+        advanced.regions = List.of("香港");
         advanced.sourceIds = List.of("airport-a");
         options.groupAdvanced.put("auto", advanced);
 

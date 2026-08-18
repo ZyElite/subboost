@@ -23,6 +23,7 @@ import android.widget.Toast;
 
 import org.subboost.android.core.ConfigOptions;
 import org.subboost.android.core.ModuleCatalog;
+import org.subboost.android.core.RegionCatalog;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -50,7 +51,9 @@ public final class AdvancedSettingsActivity extends Activity {
     private Spinner advancedGroup;
     private Spinner groupType;
     private Spinner strategy;
-    private EditText regions;
+    private Button regionsButton;
+    private TextView regionsSummary;
+    private final List<String> selectedRegions = new ArrayList<>();
     private EditText sourceIds;
     private EditText includeRegex;
     private EditText excludeRegex;
@@ -145,7 +148,10 @@ public final class AdvancedSettingsActivity extends Activity {
         advancedGroup = spinner(groupLabels); content.addView(advancedGroup, top(6));
         groupType = spinner(Arrays.asList("select", "url-test", "fallback", "load-balance", "direct-first", "reject-first")); content.addView(groupType, top(4));
         strategy = spinner(Arrays.asList("consistent-hashing", "round-robin", "sticky-sessions")); content.addView(strategy, top(4));
-        regions = field("地区：hk,jp,sg,us,tw,kr,uk,de,fr,ca,au,other", false, dp(52)); content.addView(regions, top(4));
+        regionsButton = button("选择国家/地区", view -> selectRegions());
+        content.addView(regionsButton, top(4));
+        regionsSummary = help("不限国家/地区");
+        content.addView(regionsSummary, top(2));
         sourceIds = field("来源 ID（多订阅筛选，逗号分隔）", false, dp(52)); content.addView(sourceIds, top(4));
         includeRegex = field("节点名包含正则", false, dp(52)); content.addView(includeRegex, top(4));
         excludeRegex = field("节点名排除正则", false, dp(52)); content.addView(excludeRegex, top(4));
@@ -163,7 +169,7 @@ public final class AdvancedSettingsActivity extends Activity {
             }
         });
 
-        customGroups = block(content, "自定义策略组", "每行：名称|类型|算法|地区|包含正则|排除正则|成员", 110);
+        customGroups = block(content, "自定义策略组", "每行：名称|类型|算法|国家/地区中文名|包含正则|排除正则|成员", 110);
         customRuleSets = block(content, "自定义远程规则集", "每行：id|domain/ipcidr|路径或HTTPS地址|目标组|no-resolve", 110);
         customRules = block(content, "自定义规则", "每行：DOMAIN-SUFFIX|example.com|目标组|no-resolve", 110);
         dialers = block(content, "链式代理 / 中转组", "每行：组名|类型|算法|中转节点1,2|落地节点1,2", 110);
@@ -195,7 +201,21 @@ public final class AdvancedSettingsActivity extends Activity {
         content.addView(actions, top(22));
 
         screen.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        applySystemBarInsets(screen, toolbar, scroll);
         return screen;
+    }
+
+    private void applySystemBarInsets(LinearLayout screen, TextView toolbar, ScrollView scroll) {
+        screen.setOnApplyWindowInsetsListener((view, insets) -> {
+            int top = insets.getSystemWindowInsetTop();
+            int bottom = insets.getSystemWindowInsetBottom();
+            toolbar.setPadding(dp(20), top, dp(20), 0);
+            ViewGroup.LayoutParams toolbarParams = toolbar.getLayoutParams();
+            toolbarParams.height = dp(64) + top;
+            toolbar.setLayoutParams(toolbarParams);
+            scroll.setPadding(0, 0, 0, bottom);
+            return insets;
+        });
     }
 
     private void loadOptions() {
@@ -249,6 +269,34 @@ public final class AdvancedSettingsActivity extends Activity {
                 }).show();
     }
 
+    private void selectRegions() {
+        List<RegionCatalog.Region> catalog = RegionCatalog.all();
+        String[] labels = new String[catalog.size()];
+        boolean[] checked = new boolean[catalog.size()];
+        for (int i = 0; i < catalog.size(); i++) {
+            labels[i] = catalog.get(i).name;
+            checked[i] = selectedRegions.contains(catalog.get(i).code);
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("选择国家/地区")
+                .setMultiChoiceItems(labels, checked, (dialog, which, value) -> checked[which] = value)
+                .setNegativeButton("取消", null)
+                .setNeutralButton("不限", (dialog, which) -> {
+                    selectedRegions.clear();
+                    updateRegionsSummary();
+                })
+                .setPositiveButton("确定", (dialog, which) -> {
+                    selectedRegions.clear();
+                    for (int i = 0; i < catalog.size(); i++) if (checked[i]) selectedRegions.add(catalog.get(i).code);
+                    updateRegionsSummary();
+                }).show();
+    }
+
+    private void updateRegionsSummary() {
+        String names = RegionCatalog.displayNames(selectedRegions);
+        regionsSummary.setText(names.isEmpty() ? "不限国家/地区" : "已选择：" + names);
+    }
+
     private void updateModuleSummary() {
         moduleSummary.setText("已启用 " + options.enabledModules.size() + " 个策略组（节点选择和漏网之鱼为必选）");
     }
@@ -262,7 +310,7 @@ public final class AdvancedSettingsActivity extends Activity {
         ConfigOptions.GroupAdvanced value = new ConfigOptions.GroupAdvanced();
         value.groupType = String.valueOf(groupType.getSelectedItem());
         value.strategy = String.valueOf(strategy.getSelectedItem());
-        value.regions = ConfigOptions.csv(regions.getText().toString());
+        value.regions = new ArrayList<>(selectedRegions);
         value.sourceIds = ConfigOptions.csv(sourceIds.getText().toString());
         value.includeRegex = includeRegex.getText().toString().trim();
         value.excludeRegex = excludeRegex.getText().toString().trim();
@@ -278,7 +326,9 @@ public final class AdvancedSettingsActivity extends Activity {
         ConfigOptions.GroupAdvanced value = options.groupAdvanced.get(id);
         select(groupType, value == null || blank(value.groupType) ? module.groupType : value.groupType);
         select(strategy, value == null ? "consistent-hashing" : value.strategy);
-        regions.setText(value == null ? "" : ConfigOptions.join(value.regions));
+        selectedRegions.clear();
+        if (value != null) selectedRegions.addAll(RegionCatalog.codes(value.regions));
+        updateRegionsSummary();
         sourceIds.setText(value == null ? "" : ConfigOptions.join(value.sourceIds));
         includeRegex.setText(value == null ? "" : value.includeRegex);
         excludeRegex.setText(value == null ? "" : value.excludeRegex);
@@ -351,7 +401,7 @@ public final class AdvancedSettingsActivity extends Activity {
             value.id = "custom-" + index++;
             value.name = p[0]; value.groupType = p[1];
             if (p.length > 2 && !blank(p[2])) value.strategy = p[2];
-            if (p.length > 3) value.advanced.regions = ConfigOptions.csv(p[3]);
+            if (p.length > 3) value.advanced.regions = RegionCatalog.codes(ConfigOptions.csv(p[3]));
             if (p.length > 4) value.advanced.includeRegex = p[4];
             if (p.length > 5) value.advanced.excludeRegex = p[5];
             if (p.length > 6) value.advanced.members = ConfigOptions.csv(p[6]);
@@ -424,7 +474,7 @@ public final class AdvancedSettingsActivity extends Activity {
 
     private String formatCustomGroups() {
         List<String> out = new ArrayList<>();
-        for (ConfigOptions.CustomGroup v : options.customGroups) out.add(v.name + "|" + v.groupType + "|" + v.strategy + "|" + ConfigOptions.join(v.advanced.regions) + "|" + v.advanced.includeRegex + "|" + v.advanced.excludeRegex + "|" + ConfigOptions.join(v.advanced.members));
+        for (ConfigOptions.CustomGroup v : options.customGroups) out.add(v.name + "|" + v.groupType + "|" + v.strategy + "|" + RegionCatalog.displayNames(v.advanced.regions).replace('、', ',') + "|" + v.advanced.includeRegex + "|" + v.advanced.excludeRegex + "|" + ConfigOptions.join(v.advanced.members));
         return String.join("\n", out);
     }
     private String formatRuleSets() { List<String> out = new ArrayList<>(); for (ConfigOptions.CustomRuleSet v : options.customRuleSets) out.add(v.id+"|"+v.behavior+"|"+v.path+"|"+v.target+(v.noResolve?"|no-resolve":"")); return String.join("\n",out); }

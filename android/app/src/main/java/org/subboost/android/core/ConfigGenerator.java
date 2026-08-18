@@ -129,7 +129,7 @@ public final class ConfigGenerator {
         Pattern include = regex(advanced.includeRegex);
         Pattern exclude = regex(advanced.excludeRegex);
         Set<String> nodeNames = new LinkedHashSet<>(names(nodes));
-        members.removeIf(name -> nodeNames.contains(name) && (!matchesRegion(name, advanced.regions)
+        members.removeIf(name -> nodeNames.contains(name) && (!RegionCatalog.matches(name, advanced.regions)
                 || !matchesSource(name, nodes, advanced.sourceIds)
                 || (include != null && !include.matcher(name).find())
                 || (exclude != null && exclude.matcher(name).find())));
@@ -440,30 +440,6 @@ public final class ConfigGenerator {
         if (blank(value)) return null;
         try { return Pattern.compile(value, Pattern.CASE_INSENSITIVE); }
         catch (PatternSyntaxException error) { throw new IllegalArgumentException("高级筛选正则无效：" + value); }
-    }
-
-    private static boolean matchesRegion(String name, List<String> regions) {
-        if (regions == null || regions.isEmpty()) return true;
-        Map<String, List<String>> keywords = new LinkedHashMap<>();
-        keywords.put("us", Arrays.asList("美国", " us", "usa", "los angeles", "洛杉矶", "纽约"));
-        keywords.put("hk", Arrays.asList("香港", " hk", "hong kong", "港"));
-        keywords.put("jp", Arrays.asList("日本", " jp", "japan", "东京", "大阪"));
-        keywords.put("sg", Arrays.asList("新加坡", " sg", "singapore", "狮城"));
-        keywords.put("tw", Arrays.asList("台湾", " tw", "taiwan", "台北"));
-        keywords.put("kr", Arrays.asList("韩国", " kr", "korea", "首尔"));
-        keywords.put("uk", Arrays.asList("英国", " uk", "london", "伦敦"));
-        keywords.put("de", Arrays.asList("德国", " de", "germany", "frankfurt", "法兰克福"));
-        keywords.put("fr", Arrays.asList("法国", " fr", "france", "paris", "巴黎"));
-        keywords.put("ca", Arrays.asList("加拿大", " ca", "canada", "toronto", "多伦多"));
-        keywords.put("au", Arrays.asList("澳大利亚", " au", "australia", "sydney", "悉尼"));
-        String normalized = " " + name.toLowerCase(Locale.ROOT);
-        boolean known = false;
-        for (Map.Entry<String, List<String>> entry : keywords.entrySet()) {
-            boolean match = false;
-            for (String keyword : entry.getValue()) if (normalized.contains(keyword.toLowerCase(Locale.ROOT))) { match = true; break; }
-            if (match) { known = true; if (regions.contains(entry.getKey())) return true; }
-        }
-        return regions.contains("other") && !known;
     }
 
     private static boolean matchesSource(String name, List<Map<String, Object>> nodes, List<String> sourceIds) {

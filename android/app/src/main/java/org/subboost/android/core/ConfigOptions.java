@@ -85,7 +85,12 @@ public final class ConfigOptions {
         if (proxyGroupOrder == null) proxyGroupOrder = new ArrayList<>();
         if (ruleOrder == null) ruleOrder = new ArrayList<>();
         if (localSharePort < 1024 || localSharePort > 65535) localSharePort = 17890;
-        for (CustomGroup group : customGroups) if (group != null && group.advanced == null) group.advanced = new GroupAdvanced();
+        for (GroupAdvanced advanced : groupAdvanced.values()) normalizeAdvanced(advanced);
+        for (CustomGroup group : customGroups) {
+            if (group == null) continue;
+            if (group.advanced == null) group.advanced = new GroupAdvanced();
+            normalizeAdvanced(group.advanced);
+        }
         for (DialerGroup group : dialerGroups) {
             if (group == null) continue;
             if (group.relayNodes == null) group.relayNodes = new ArrayList<>();
@@ -95,6 +100,17 @@ public final class ConfigOptions {
 
     private static boolean blank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private static void normalizeAdvanced(GroupAdvanced value) {
+        if (value == null) return;
+        value.regions = RegionCatalog.codes(value.regions);
+        if (value.sourceIds == null) value.sourceIds = new ArrayList<>();
+        if (value.members == null) value.members = new ArrayList<>();
+        if (value.extraMembers == null) value.extraMembers = new ArrayList<>();
+        if (value.excludedMembers == null) value.excludedMembers = new ArrayList<>();
+        if (value.includeRegex == null) value.includeRegex = "";
+        if (value.excludeRegex == null) value.excludeRegex = "";
     }
 
     public static final class GroupAdvanced {
