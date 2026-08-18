@@ -21,4 +21,13 @@ public class RegionCatalogTest {
         assertTrue(RegionCatalog.matches("JP Tokyo 01", List.of("jp")));
         assertTrue(RegionCatalog.matches("未知地区 01", List.of("other")));
     }
+
+    @Test
+    public void localizesStandaloneCountryCodesInNodeNames() {
+        assertEquals("香港-01", RegionCatalog.localizeNodeName("HK-01"));
+        assertEquals("日本 02", RegionCatalog.localizeNodeName("JP 02"));
+        assertEquals("美国03", RegionCatalog.localizeNodeName("US03"));
+        assertEquals("英国 Premium", RegionCatalog.localizeNodeName("GB Premium"));
+        assertEquals("HKT Premium", RegionCatalog.localizeNodeName("HKT Premium"));
+    }
 }

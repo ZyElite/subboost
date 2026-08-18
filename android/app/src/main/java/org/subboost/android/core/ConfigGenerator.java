@@ -83,6 +83,7 @@ public final class ConfigGenerator {
             String type = advanced == null || blank(advanced.groupType) ? module.groupType : advanced.groupType;
             List<String> defaults;
             if (module.id.equals("select")) defaults = unique(auto, "DIRECT", "REJECT", nodeNames);
+            else if (module.id.equals("wificalling")) defaults = wifiCallingNodes(nodes);
             else if (module.id.equals("auto") || type.equals("url-test") || type.equals("fallback") || type.equals("load-balance")) defaults = new ArrayList<>(nodeNames);
             else if (type.equals("direct-first")) defaults = unique("DIRECT", "REJECT", select, auto, nodeNames);
             else if (type.equals("reject-first")) defaults = unique("REJECT", "DIRECT", select);
@@ -129,12 +130,13 @@ public final class ConfigGenerator {
         Pattern include = regex(advanced.includeRegex);
         Pattern exclude = regex(advanced.excludeRegex);
         Set<String> nodeNames = new LinkedHashSet<>(names(nodes));
+        members = localizeNodeReferences(members, nodeNames);
         members.removeIf(name -> nodeNames.contains(name) && (!RegionCatalog.matches(name, advanced.regions)
                 || !matchesSource(name, nodes, advanced.sourceIds)
                 || (include != null && !include.matcher(name).find())
                 || (exclude != null && exclude.matcher(name).find())));
-        if (advanced.extraMembers != null) members.addAll(advanced.extraMembers);
-        if (advanced.excludedMembers != null) members.removeAll(advanced.excludedMembers);
+        if (advanced.extraMembers != null) members.addAll(localizeNodeReferences(advanced.extraMembers, nodeNames));
+        if (advanced.excludedMembers != null) members.removeAll(localizeNodeReferences(advanced.excludedMembers, nodeNames));
         return dedupe(members);
     }
 
@@ -164,6 +166,14 @@ public final class ConfigGenerator {
         Set<String> enabled = new LinkedHashSet<>(options.enabledModules);
         Set<String> disabled = new LinkedHashSet<>(options.disabledBuiltinRules);
         String base = trimSlash(options.ruleProviderBaseUrl);
+
+        if (enabled.contains("wificalling")) {
+            String target = moduleNames.get("wificalling");
+            rules.add("AND,((NETWORK,UDP),(DST-PORT,500))," + target);
+            keys.add("wificalling:udp-500");
+            rules.add("AND,((NETWORK,UDP),(DST-PORT,4500))," + target);
+            keys.add("wificalling:udp-4500");
+        }
 
         int customIndex = 0;
         for (ConfigOptions.CustomRule custom : options.customRules) {
@@ -232,9 +242,10 @@ public final class ConfigGenerator {
         for (Map<String, Object> group : groups) groupNames.add(String.valueOf(group.get("name")));
         int index = 0;
         for (Map.Entry<String, Integer> entry : options.nodeListenerPorts.entrySet()) {
-            if (!nodeNames.contains(entry.getKey())) continue;
+            String nodeName = RegionCatalog.localizeNodeName(entry.getKey());
+            if (!nodeNames.contains(nodeName)) continue;
             validateListenerPort(entry.getValue(), ports);
-            listeners.add(listener("node-mixed-" + index++, entry.getValue(), entry.getKey(), false));
+            listeners.add(listener("node-mixed-" + index++, entry.getValue(), nodeName, false));
         }
         for (ConfigOptions.Listener binding : options.groupListeners) {
             if (binding == null || !binding.enabled || !groupNames.contains(binding.group)) continue;
@@ -344,7 +355,7 @@ public final class ConfigGenerator {
             String original = String.valueOf(node.get("name"));
             String base = options.nodeNameOverrides.get(original);
             if (blank(base)) base = original;
-            String name = base.trim();
+            String name = RegionCatalog.localizeNodeName(base.trim());
             int suffix = 2;
             while (!used.add(name)) name = base.trim() + " (" + suffix++ + ")";
             node.put("name", name);
@@ -414,6 +425,16 @@ public final class ConfigGenerator {
         for (Map<String, Object> node : nodes) out.add(String.valueOf(node.get("name"))); return out;
     }
 
+    private static List<String> wifiCallingNodes(List<Map<String, Object>> nodes) {
+        List<String> out = new ArrayList<>();
+        for (Map<String, Object> node : nodes) {
+            if (WifiCallingAnalyzer.analyze(node).status == WifiCallingAnalyzer.Status.READY) {
+                out.add(String.valueOf(node.get("name")));
+            }
+        }
+        return out;
+    }
+
     private static List<String> unique(Object... values) {
         List<String> out = new ArrayList<>();
         for (Object value : values) {
@@ -429,7 +450,22 @@ public final class ConfigGenerator {
 
     private static List<String> dedupe(List<String> values) { return unique(values); }
     private static List<String> existing(List<String> values, Set<String> allowed) {
-        List<String> out = new ArrayList<>(); if (values != null) for (String value : values) if (allowed.contains(value)) out.add(value); return dedupe(out);
+        List<String> out = new ArrayList<>();
+        if (values != null) for (String value : values) {
+            String localized = RegionCatalog.localizeNodeName(value);
+            if (allowed.contains(localized)) out.add(localized);
+        }
+        return dedupe(out);
+    }
+
+    private static List<String> localizeNodeReferences(List<String> values, Set<String> nodeNames) {
+        List<String> out = new ArrayList<>();
+        if (values == null) return out;
+        for (String value : values) {
+            String localized = RegionCatalog.localizeNodeName(value);
+            out.add(nodeNames.contains(localized) ? localized : value);
+        }
+        return out;
     }
     private static String trimSlash(String value) { String out = value.trim(); while (out.endsWith("/")) out = out.substring(0, out.length() - 1); return out; }
     private static String resolveRuleUrl(String base, String path) { return path.startsWith("https://") ? path : base + "/" + path.replaceFirst("^/+", ""); }

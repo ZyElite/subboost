@@ -23,6 +23,7 @@ public final class ModuleCatalog {
         add("microsoft", "Ⓜ️ 微软服务", "select", "microsoft,domain,geosite/microsoft.mrs;onedrive,domain,geosite/onedrive.mrs");
         add("apple", "🍏 苹果服务", "select", "apple,domain,geosite/apple.mrs;icloud,domain,geosite/icloud.mrs");
         add("telegram", "📲 电报消息", "select", "telegram,domain,geosite/telegram.mrs;telegram-ip,ipcidr,geoip/telegram.mrs,true");
+        add("wificalling", "📶 WiFi Calling", "select", "");
         add("twitter", "🐦 推特/X", "select", "twitter,domain,geosite/twitter.mrs;twitter-ip,ipcidr,geoip/twitter.mrs,true");
         add("meta", "📘 Meta 系", "select", "facebook,domain,geosite/facebook.mrs;instagram,domain,geosite/instagram.mrs;whatsapp,domain,geosite/whatsapp.mrs;facebook-ip,ipcidr,geoip/facebook.mrs,true");
         add("discord", "🎙️ Discord", "select", "discord,domain,geosite/discord.mrs");
@@ -69,8 +70,8 @@ public final class ModuleCatalog {
     public static boolean isTemplate(String value) { return "minimal".equals(value) || "standard".equals(value) || "full".equals(value); }
 
     public static List<String> modulesForTemplate(String template) {
-        if ("minimal".equals(template)) return Arrays.asList("select", "auto", "ad", "private", "cn", "global", "final");
-        if ("standard".equals(template)) return Arrays.asList("select", "auto", "ad", "private", "cn", "global", "ai", "youtube", "google", "microsoft", "apple", "github", "telegram", "final");
+        if ("minimal".equals(template)) return Arrays.asList("select", "auto", "wificalling", "ad", "private", "cn", "global", "final");
+        if ("standard".equals(template)) return Arrays.asList("select", "auto", "wificalling", "ad", "private", "cn", "global", "ai", "youtube", "google", "microsoft", "apple", "github", "telegram", "final");
         List<String> out = new ArrayList<>();
         for (Module module : MODULES) {
             if (!module.id.equals("adult") && !module.id.equals("gemini") && !module.id.equals("google-scholar")) out.add(module.id);

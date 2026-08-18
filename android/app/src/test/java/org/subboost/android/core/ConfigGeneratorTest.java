@@ -21,16 +21,24 @@ public class ConfigGeneratorTest {
         node.put("port", 443);
         node.put("cipher", "aes-128-gcm");
         node.put("password", "secret");
+        node.put("udp", true);
 
         String output = new ConfigGenerator().generate(List.of(node));
         Map<String, Object> config = new Yaml().load(output);
 
         assertEquals(7897, config.get("mixed-port"));
-        assertEquals(1, ((List<?>) config.get("proxies")).size());
+        List<Map<String, Object>> proxies = (List<Map<String, Object>>) config.get("proxies");
+        assertEquals(1, proxies.size());
+        assertEquals("香港 01", proxies.get(0).get("name"));
         List<Map<String, Object>> groups = (List<Map<String, Object>>) config.get("proxy-groups");
         assertEquals("🚀 节点选择", groups.get(0).get("name"));
-        assertTrue(((List<?>) groups.get(0).get("proxies")).contains("HK 01"));
+        assertTrue(((List<?>) groups.get(0).get("proxies")).contains("香港 01"));
+        Map<String, Object> wifiCalling = groups.stream()
+                .filter(group -> group.get("name").equals("📶 WiFi Calling")).findFirst().orElseThrow();
+        assertEquals(List.of("香港 01"), wifiCalling.get("proxies"));
         List<?> rules = (List<?>) config.get("rules");
+        assertTrue(rules.contains("AND,((NETWORK,UDP),(DST-PORT,500)),📶 WiFi Calling"));
+        assertTrue(rules.contains("AND,((NETWORK,UDP),(DST-PORT,4500)),📶 WiFi Calling"));
         assertEquals("MATCH,🐟 漏网之鱼", rules.get(rules.size() - 1));
     }
 
@@ -58,7 +66,7 @@ public class ConfigGeneratorTest {
         Map<String, Object> config = new Yaml().load(new ConfigGenerator().generate(List.of(hk, jp), options));
         List<Map<String, Object>> groups = (List<Map<String, Object>>) config.get("proxy-groups");
 
-        assertEquals(7, groups.size());
+        assertEquals(8, groups.size());
         Map<String, Object> auto = groups.stream().filter(group -> group.get("name").equals("⚡ 自动选择")).findFirst().orElseThrow();
         assertEquals("load-balance", auto.get("type"));
         assertEquals("round-robin", auto.get("strategy"));
@@ -91,7 +99,10 @@ public class ConfigGeneratorTest {
         List<Map<String, Object>> proxies = (List<Map<String, Object>>) config.get("proxies");
         assertEquals("香港中转", proxies.get(1).get("dialer-proxy"));
         assertTrue(((Map<?, ?>) config.get("rule-providers")).containsKey("company"));
-        assertEquals("DOMAIN-SUFFIX,example.com,香港中转", ((List<?>) config.get("rules")).get(0));
+        List<?> rules = (List<?>) config.get("rules");
+        assertEquals("AND,((NETWORK,UDP),(DST-PORT,500)),📶 WiFi Calling", rules.get(0));
+        assertEquals("AND,((NETWORK,UDP),(DST-PORT,4500)),📶 WiFi Calling", rules.get(1));
+        assertTrue(rules.contains("DOMAIN-SUFFIX,example.com,香港中转"));
         assertEquals(10080, ((Map<?, ?>) ((List<?>) config.get("listeners")).get(0)).get("port"));
     }
 

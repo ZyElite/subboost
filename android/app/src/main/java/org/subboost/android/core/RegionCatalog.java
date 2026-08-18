@@ -7,6 +7,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Chinese display names and node-name matching rules for region filters. */
 public final class RegionCatalog {
@@ -50,6 +52,21 @@ public final class RegionCatalog {
         List<String> names = new ArrayList<>();
         for (Region region : REGIONS) if (codes.contains(region.code)) names.add(region.name);
         return String.join("、", names);
+    }
+
+    public static String localizeNodeName(String nodeName) {
+        String localized = String.valueOf(nodeName);
+        for (Region region : REGIONS) {
+            if (region.code.equals("other")) continue;
+            String aliases = switch (region.code) {
+                case "us" -> "US|USA";
+                case "uk" -> "UK|GB";
+                default -> region.code;
+            };
+            Pattern code = Pattern.compile("(?i)(?<![A-Za-z])(?:" + aliases + ")(?![A-Za-z])");
+            localized = code.matcher(localized).replaceAll(Matcher.quoteReplacement(region.name));
+        }
+        return localized;
     }
 
     public static boolean matches(String nodeName, List<String> selectedValues) {

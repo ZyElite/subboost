@@ -28,4 +28,14 @@ public class ConfigOptionsTest {
     public void rejectsUnknownSchema() {
         ConfigOptions.fromJson("{\"schema\":\"unknown\",\"template\":\"full\"}");
     }
+
+    @Test
+    public void migratesSavedTemplatesToIncludeWifiCalling() {
+        ConfigOptions options = ConfigOptions.fromJson("""
+                {"schema":"subboost-android-config/v1","template":"minimal",
+                 "enabledModules":["select","auto","final"]}
+                """);
+
+        assertTrue(options.enabledModules.contains("wificalling"));
+    }
 }
