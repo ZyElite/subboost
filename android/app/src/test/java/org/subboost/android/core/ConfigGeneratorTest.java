@@ -33,12 +33,10 @@ public class ConfigGeneratorTest {
         List<Map<String, Object>> groups = (List<Map<String, Object>>) config.get("proxy-groups");
         assertEquals("🚀 节点选择", groups.get(0).get("name"));
         assertTrue(((List<?>) groups.get(0).get("proxies")).contains("香港 01"));
-        Map<String, Object> wifiCalling = groups.stream()
-                .filter(group -> group.get("name").equals("📶 WiFi Calling")).findFirst().orElseThrow();
-        assertEquals(List.of("香港 01"), wifiCalling.get("proxies"));
         List<?> rules = (List<?>) config.get("rules");
-        assertTrue(rules.contains("AND,((NETWORK,UDP),(DST-PORT,500)),📶 WiFi Calling"));
-        assertTrue(rules.contains("AND,((NETWORK,UDP),(DST-PORT,4500)),📶 WiFi Calling"));
+        assertTrue(groups.stream().noneMatch(group -> String.valueOf(group.get("name")).contains("WiFi Calling")));
+        assertTrue(rules.stream().noneMatch(value -> String.valueOf(value).contains("DST-PORT,500")));
+        assertTrue(rules.stream().noneMatch(value -> String.valueOf(value).contains("DST-PORT,4500")));
         assertEquals("MATCH,🐟 漏网之鱼", rules.get(rules.size() - 1));
     }
 
@@ -66,7 +64,7 @@ public class ConfigGeneratorTest {
         Map<String, Object> config = new Yaml().load(new ConfigGenerator().generate(List.of(hk, jp), options));
         List<Map<String, Object>> groups = (List<Map<String, Object>>) config.get("proxy-groups");
 
-        assertEquals(8, groups.size());
+        assertEquals(7, groups.size());
         Map<String, Object> auto = groups.stream().filter(group -> group.get("name").equals("⚡ 自动选择")).findFirst().orElseThrow();
         assertEquals("load-balance", auto.get("type"));
         assertEquals("round-robin", auto.get("strategy"));
@@ -100,9 +98,9 @@ public class ConfigGeneratorTest {
         assertEquals("香港中转", proxies.get(1).get("dialer-proxy"));
         assertTrue(((Map<?, ?>) config.get("rule-providers")).containsKey("company"));
         List<?> rules = (List<?>) config.get("rules");
-        assertEquals("AND,((NETWORK,UDP),(DST-PORT,500)),📶 WiFi Calling", rules.get(0));
-        assertEquals("AND,((NETWORK,UDP),(DST-PORT,4500)),📶 WiFi Calling", rules.get(1));
         assertTrue(rules.contains("DOMAIN-SUFFIX,example.com,香港中转"));
+        assertTrue(rules.stream().noneMatch(value -> String.valueOf(value).contains("DST-PORT,500")));
+        assertTrue(rules.stream().noneMatch(value -> String.valueOf(value).contains("DST-PORT,4500")));
         assertEquals(10080, ((Map<?, ?>) ((List<?>) config.get("listeners")).get(0)).get("port"));
     }
 

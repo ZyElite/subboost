@@ -9,6 +9,14 @@ import static org.junit.Assert.assertTrue;
 
 public class RegionCatalogTest {
     @Test
+    public void keepsCountryCodeWhenNameAlreadyContainsChineseCountry() {
+        assertEquals("VLESS-加拿大-CA-32",
+                RegionCatalog.localizeNodeName("VLESS-加拿大-CA-32"));
+        assertEquals("Hysteria2-荷兰-NL-01",
+                RegionCatalog.localizeNodeName("Hysteria2-荷兰-NL-01"));
+    }
+
+    @Test
     public void convertsChineseNamesAndLegacyCodesToStableCodes() {
         assertEquals(List.of("hk", "jp", "other"),
                 RegionCatalog.codes(List.of("香港", "JP", "其他地区")));

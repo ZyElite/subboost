@@ -22,11 +22,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Offline subscription parser for the formats most commonly consumed by Mihomo. */
 public final class SubscriptionParser {
     private static final Gson GSON = new Gson();
     private static final Type MAP_TYPE = new TypeToken<Map<String, Object>>() { }.getType();
+    private static final Pattern COUNTRY_CODE_TOKEN = Pattern.compile("(?i)(^|[-_\\s])([A-Z]{2})(?=$|[-_\\s])");
     private static final Set<String> SUPPORTED_SCHEMES = new HashSet<>(Arrays.asList(
             "ss", "ssr", "vmess", "vless", "trojan", "hysteria2", "hy2", "tuic",
             "http", "https", "socks", "socks5"));
@@ -345,7 +348,8 @@ public final class SubscriptionParser {
         List<Map<String, Object>> result = new ArrayList<>();
         for (Map<String, Object> source : nodes) {
             Map<String, Object> node = new LinkedHashMap<>(source);
-            String base = nonBlank(String.valueOf(node.getOrDefault("name", "")), "未命名节点");
+            String base = localizeCountryName(nonBlank(
+                    String.valueOf(node.getOrDefault("name", "")), "未命名节点"));
             String name = base;
             int suffix = 2;
             while (!used.add(name)) name = base + " (" + suffix++ + ")";
@@ -353,6 +357,31 @@ public final class SubscriptionParser {
             result.add(node);
         }
         return result;
+    }
+
+    private static String localizeCountryName(String name) {
+        Matcher matcher = COUNTRY_CODE_TOKEN.matcher(name);
+        StringBuffer localized = new StringBuffer();
+        while (matcher.find()) {
+            int precedingIndex = matcher.start() - 1;
+            if (precedingIndex >= 0
+                    && Character.UnicodeScript.of(name.charAt(precedingIndex)) == Character.UnicodeScript.HAN) {
+                matcher.appendReplacement(localized, Matcher.quoteReplacement(matcher.group()));
+                continue;
+            }
+
+            String code = matcher.group(2).toUpperCase(Locale.ROOT);
+            String country = new Locale.Builder().setRegion(code).build()
+                    .getDisplayCountry(Locale.SIMPLIFIED_CHINESE);
+            if (country.isEmpty() || country.equalsIgnoreCase(code)) {
+                matcher.appendReplacement(localized, Matcher.quoteReplacement(matcher.group()));
+                continue;
+            }
+            matcher.appendReplacement(localized, Matcher.quoteReplacement(
+                    matcher.group(1) + country + "-" + code));
+        }
+        matcher.appendTail(localized);
+        return localized.toString();
     }
 
     private static boolean isValidNode(Map<String, Object> node) {

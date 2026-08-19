@@ -265,7 +265,7 @@ public final class AdvancedSettingsActivity extends Activity {
     }
 
     private void updateModuleSummary() {
-        moduleSummary.setText("已启用 " + options.enabledModules.size() + " 个策略组（节点选择、WiFi Calling 和漏网之鱼为必选）");
+        moduleSummary.setText("已启用 " + options.enabledModules.size() + " 个策略组（节点选择和漏网之鱼为必选）");
     }
 
     private void saveGroupEditor() {

@@ -83,7 +83,6 @@ public final class ConfigGenerator {
             String type = advanced == null || blank(advanced.groupType) ? module.groupType : advanced.groupType;
             List<String> defaults;
             if (module.id.equals("select")) defaults = unique(auto, "DIRECT", "REJECT", nodeNames);
-            else if (module.id.equals("wificalling")) defaults = wifiCallingNodes(nodes);
             else if (module.id.equals("auto") || type.equals("url-test") || type.equals("fallback") || type.equals("load-balance")) defaults = new ArrayList<>(nodeNames);
             else if (type.equals("direct-first")) defaults = unique("DIRECT", "REJECT", select, auto, nodeNames);
             else if (type.equals("reject-first")) defaults = unique("REJECT", "DIRECT", select);
@@ -167,13 +166,6 @@ public final class ConfigGenerator {
         Set<String> disabled = new LinkedHashSet<>(options.disabledBuiltinRules);
         String base = trimSlash(options.ruleProviderBaseUrl);
 
-        if (enabled.contains("wificalling")) {
-            String target = moduleNames.get("wificalling");
-            rules.add("AND,((NETWORK,UDP),(DST-PORT,500))," + target);
-            keys.add("wificalling:udp-500");
-            rules.add("AND,((NETWORK,UDP),(DST-PORT,4500))," + target);
-            keys.add("wificalling:udp-4500");
-        }
 
         int customIndex = 0;
         for (ConfigOptions.CustomRule custom : options.customRules) {
@@ -423,16 +415,6 @@ public final class ConfigGenerator {
     private static List<String> names(List<Map<String, Object>> nodes) {
         List<String> out = new ArrayList<>();
         for (Map<String, Object> node : nodes) out.add(String.valueOf(node.get("name"))); return out;
-    }
-
-    private static List<String> wifiCallingNodes(List<Map<String, Object>> nodes) {
-        List<String> out = new ArrayList<>();
-        for (Map<String, Object> node : nodes) {
-            if (WifiCallingAnalyzer.analyze(node).status == WifiCallingAnalyzer.Status.READY) {
-                out.add(String.valueOf(node.get("name")));
-            }
-        }
-        return out;
     }
 
     private static List<String> unique(Object... values) {

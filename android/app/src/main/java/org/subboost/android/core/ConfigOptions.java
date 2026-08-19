@@ -64,7 +64,6 @@ public final class ConfigOptions {
         if (enabledModules == null || enabledModules.isEmpty()) enabledModules = new ArrayList<>(ModuleCatalog.modulesForTemplate(template));
         enabledModules.removeIf(id -> ModuleCatalog.byId(id) == null);
         if (!enabledModules.contains("select")) enabledModules.add(0, "select");
-        if (!enabledModules.contains("wificalling")) enabledModules.add(Math.min(2, enabledModules.size()), "wificalling");
         if (!enabledModules.contains("final")) enabledModules.add("final");
         if (mixedPort < 1 || mixedPort > 65535) mixedPort = 7897;
         if (testInterval < 10) testInterval = 300;

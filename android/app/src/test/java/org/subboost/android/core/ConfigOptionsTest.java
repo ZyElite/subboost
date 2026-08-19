@@ -2,6 +2,8 @@ package org.subboost.android.core;
 
 import org.junit.Test;
 
+import java.util.List;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -30,12 +32,12 @@ public class ConfigOptionsTest {
     }
 
     @Test
-    public void migratesSavedTemplatesToIncludeWifiCalling() {
+    public void keepsSavedTemplateModulesWithoutRemovedWifiCallingGroup() {
         ConfigOptions options = ConfigOptions.fromJson("""
                 {"schema":"subboost-android-config/v1","template":"minimal",
                  "enabledModules":["select","auto","final"]}
                 """);
 
-        assertTrue(options.enabledModules.contains("wificalling"));
+        assertEquals(List.of("select", "auto", "final"), options.enabledModules);
     }
 }

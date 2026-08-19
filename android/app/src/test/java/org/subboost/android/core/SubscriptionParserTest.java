@@ -65,4 +65,19 @@ public class SubscriptionParserTest {
         assertEquals(1, result.nodes().size());
         assertEquals(1, result.errors().size());
     }
+
+    @Test
+    public void insertsChineseCountryNameAndKeepsCountryCodeDuringConversion() {
+        String yaml = "proxies:\n"
+                + "  - {name: VLESS-CA-32, type: vless, server: ca.example.com, port: 443}\n"
+                + "  - {name: Hysteria2-NL-01, type: hysteria2, server: nl.example.com, port: 443}\n"
+                + "  - {name: VLESS-加拿大-CA-33, type: vless, server: ca2.example.com, port: 443}\n";
+
+        ParseResult result = parser.parse(yaml);
+
+        assertEquals(3, result.nodes().size());
+        assertEquals("VLESS-加拿大-CA-32", result.nodes().get(0).get("name"));
+        assertEquals("Hysteria2-荷兰-NL-01", result.nodes().get(1).get("name"));
+        assertEquals("VLESS-加拿大-CA-33", result.nodes().get(2).get("name"));
+    }
 }

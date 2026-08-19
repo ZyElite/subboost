@@ -31,7 +31,6 @@ import org.subboost.android.core.ConfigOptions;
 import org.subboost.android.core.LocalConfigServer;
 import org.subboost.android.core.ParseResult;
 import org.subboost.android.core.SubscriptionParser;
-import org.subboost.android.core.WifiCallingAnalyzer;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -347,24 +346,10 @@ public final class MainActivity extends Activity {
         status.setText(summary);
 
         List<String> lines = new ArrayList<>();
-        int ready = 0;
-        int unknown = 0;
-        int unsupported = 0;
-        for (Map<String, Object> node : nodes) {
-            WifiCallingAnalyzer.Status wifiStatus = WifiCallingAnalyzer.analyze(node).status;
-            if (wifiStatus == WifiCallingAnalyzer.Status.READY) ready++;
-            else if (wifiStatus == WifiCallingAnalyzer.Status.UNKNOWN) unknown++;
-            else unsupported++;
-        }
-        if (!nodes.isEmpty()) {
-            lines.add("WiFi Calling 配置分析：可尝试 " + ready + " · 待确认 " + unknown + " · 不支持 " + unsupported);
-            lines.add("判断条件：节点支持 UDP；出口 UDP 500/4500 仍需在代理客户端中实测。");
-        }
         for (int i = 0; i < nodes.size(); i++) {
             Map<String, Object> node = nodes.get(i);
             String source = String.valueOf(node.getOrDefault("_subboost-source", "manual"));
-            WifiCallingAnalyzer.Analysis wifi = WifiCallingAnalyzer.analyze(node);
-            lines.add("• " + node.get("name") + "  [" + node.get("type") + " · " + source + "]\n  WiFi Calling：" + wifi.message);
+            lines.add("• " + node.get("name") + "  [" + node.get("type") + " · " + source + "]");
         }
         for (int i = 0; i < Math.min(errors.size(), 3); i++) lines.add("⚠ " + errors.get(i));
         nodePreview.setText(String.join("\n", lines));

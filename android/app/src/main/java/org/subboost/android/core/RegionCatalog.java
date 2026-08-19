@@ -64,7 +64,18 @@ public final class RegionCatalog {
                 default -> region.code;
             };
             Pattern code = Pattern.compile("(?i)(?<![A-Za-z])(?:" + aliases + ")(?![A-Za-z])");
-            localized = code.matcher(localized).replaceAll(Matcher.quoteReplacement(region.name));
+            Matcher matcher = code.matcher(localized);
+            StringBuffer result = new StringBuffer();
+            while (matcher.find()) {
+                int prefixStart = matcher.start() - region.name.length() - 1;
+                boolean alreadyLocalized = prefixStart >= 0
+                        && localized.charAt(matcher.start() - 1) == '-'
+                        && localized.regionMatches(prefixStart, region.name, 0, region.name.length());
+                matcher.appendReplacement(result, Matcher.quoteReplacement(
+                        alreadyLocalized ? matcher.group() : region.name));
+            }
+            matcher.appendTail(result);
+            localized = result.toString();
         }
         return localized;
     }
