@@ -6,6 +6,8 @@ SubBoost Android 是仓库内独立的原生 Android 客户端。它在设备本
 
 - 从一个或多个 HTTPS 订阅地址、系统文件或粘贴文本导入内容，并自动聚合多来源节点
 - 解析 Clash YAML、Base64 订阅和常用分享链接
+- 记忆已导入的 HTTPS 订阅地址，重新打开应用后可直接点击“获取订阅”
+- 生成配置前自动检测节点连接，移除超时或不可达的 TCP/HTTP(S)/SOCKS5 节点；Hysteria2、TUIC 等 UDP-only 节点保留并交由 Mihomo 运行时测速
 - 支持 SS、SSR、VMess、VLESS、Trojan、Hysteria2、TUIC、HTTP(S) 与 SOCKS5
 - 自动处理重复节点名，并把 `HK`、`JP`、`US` 等节点名缩写映射为香港、日本、美国等中文名称
 - 精简版、标准版、完整版三套内置模板
@@ -27,6 +29,8 @@ SubBoost Android 是仓库内独立的原生 Android 客户端。它在设备本
 - 精简版：节点选择、自动选择、广告、私有网络、国内、非中国和兜底
 - 标准版：在精简版基础上增加 AI、YouTube、Google、Microsoft、Apple、GitHub、Telegram
 - 完整版：启用除成人内容、Gemini 和 Google Scholar 之外的全部内置模块；这些模块仍可手动打开
+
+生成配置时，策略组测速地址默认使用 `https://www.gstatic.com/generate_204`。其中 `ww.gstatic.com` 无法解析，请使用带三个 `w` 的有效地址 `www.gstatic.com`。
 
 导入节点时，节点名称中的独立国家/地区缩写会自动补充中文名称并保留原缩写，例如 `VLESS-CA-32` 会显示为 `VLESS-加拿大-CA-32`、`Hysteria2-NL-01` 会显示为 `Hysteria2-荷兰-NL-01`；生成 YAML 后，Mihomo 的节点选择列表直接使用这些中文名称。高级文本配置统一使用 `|` 分栏，界面内每一项均带有格式提示。例如：
 

@@ -29,6 +29,7 @@ import android.widget.Toast;
 import org.subboost.android.core.ConfigGenerator;
 import org.subboost.android.core.ConfigOptions;
 import org.subboost.android.core.LocalConfigServer;
+import org.subboost.android.core.NodeConnectivityChecker;
 import org.subboost.android.core.ParseResult;
 import org.subboost.android.core.SubscriptionParser;
 
@@ -54,12 +55,14 @@ public final class MainActivity extends Activity {
     private static final int MAX_INPUT_BYTES = 8 * 1024 * 1024;
     private static final String SETTINGS_NAME = "subboost-settings";
     private static final String SHARE_TOKEN_KEY = "share-token";
+    private static final String SUBSCRIPTION_URLS_KEY = "subscription-urls";
 
     private final SubscriptionParser parser = new SubscriptionParser();
     private final ConfigGenerator generator = new ConfigGenerator();
     private ConfigOptions configOptions = new ConfigOptions();
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private List<Map<String, Object>> nodes = Collections.emptyList();
+    private boolean nodesTested;
     private String pendingSave = "";
 
     private EditText urlInput;
@@ -70,6 +73,7 @@ public final class MainActivity extends Activity {
     private ScrollView nodePreviewScroll;
     private ProgressBar progress;
     private Button fetchButton;
+    private Button generateButton;
     private TextView localShareLink;
     private TextView templateModeSummary;
     private String localShareToken;
@@ -87,6 +91,10 @@ public final class MainActivity extends Activity {
             }
         }
         setContentView(buildUi());
+        if (savedInstanceState == null) {
+            urlInput.setText(getSharedPreferences(SETTINGS_NAME, MODE_PRIVATE)
+                    .getString(SUBSCRIPTION_URLS_KEY, ""));
+        }
         if (savedInstanceState != null) {
             sourceInput.setText(savedInstanceState.getString("source", ""));
             outputInput.setText(savedInstanceState.getString("output", ""));
@@ -165,7 +173,7 @@ public final class MainActivity extends Activity {
         content.addView(nodePreviewScroll, fixedHeightTopMargin(132, 4));
 
         content.addView(section("2. 生成配置"), topMargin(18));
-        content.addView(text("默认模式", 14), topMargin(8));
+        content.addView(text("默认模式（生成时会自动移除连接超时节点）", 14), topMargin(8));
         LinearLayout templateModes = horizontal();
         templateModes.addView(templateModeButton("精简版", "minimal"), weightedButton(0));
         templateModes.addView(templateModeButton("标准版", "standard"), weightedButton(6));
@@ -174,7 +182,8 @@ public final class MainActivity extends Activity {
         templateModeSummary = text("", 13);
         content.addView(templateModeSummary, topMargin(5));
         content.addView(button("高级设置", view -> openAdvancedSettings()), topMargin(8));
-        content.addView(button("生成 Mihomo YAML", view -> generateConfig()), topMargin(8));
+        generateButton = button("生成 Mihomo YAML", view -> generateConfig());
+        content.addView(generateButton, topMargin(8));
 
         outputInput = edit("生成的 config.yaml 会显示在这里", true, dp(190));
         configureInnerScrolling(outputInput, true);
@@ -267,6 +276,9 @@ public final class MainActivity extends Activity {
             show("为保护订阅凭据，只允许 HTTPS 地址");
             return;
         }
+        getSharedPreferences(SETTINGS_NAME, MODE_PRIVATE).edit()
+                .putString(SUBSCRIPTION_URLS_KEY, String.join("\n", urls))
+                .apply();
         setBusy(true, "正在获取 " + urls.size() + " 个订阅…");
         executor.execute(() -> {
             List<Map<String, Object>> aggregated = new ArrayList<>();
@@ -296,6 +308,7 @@ public final class MainActivity extends Activity {
             runOnUiThread(() -> {
                 sourceInput.setText(String.join("\n", contents));
                 nodes = unique;
+                nodesTested = false;
                 setBusy(false, unique.isEmpty() ? "订阅获取失败" : "多订阅聚合完成");
                 renderParseResult(errors, true);
             });
@@ -337,6 +350,7 @@ public final class MainActivity extends Activity {
             manual.add(node);
         }
         nodes = manual;
+        nodesTested = false;
         renderParseResult(result.errors(), notify);
     }
 
@@ -374,17 +388,53 @@ public final class MainActivity extends Activity {
     }
 
     private void generateConfig() {
-        if (nodes.isEmpty()) parseSource(false);
-        try {
-            String yaml = generator.generate(nodes, configOptions);
-            outputInput.setText(yaml);
-            outputInput.setSelection(0);
-            if (LocalConfigServer.get().isRunning()) LocalConfigServer.get().update(yaml);
-            status.setText("配置已生成，共 " + nodes.size() + " 个节点");
-            show("config.yaml 已生成");
-        } catch (IllegalArgumentException error) {
-            show(message(error));
+        if (nodes.isEmpty() && !nodesTested) parseSource(false);
+        if (nodes.isEmpty()) {
+            show("没有可用于生成配置的节点");
+            return;
         }
+        List<Map<String, Object>> sourceNodes = new ArrayList<>(nodes);
+        ConfigOptions options = configOptions;
+        options.normalize();
+        setBusy(true, "正在检测节点，超时节点将自动移除…");
+        executor.execute(() -> {
+            NodeConnectivityChecker.Result checked = new NodeConnectivityChecker().check(sourceNodes, options.testUrl);
+            if (checked.available.isEmpty()) {
+                runOnUiThread(() -> {
+                    nodes = Collections.emptyList();
+                    nodesTested = true;
+                    setBusy(false, "所有节点均超时或不可达，未生成配置");
+                    renderParseResult(Collections.singletonList("所有节点均未通过连接检测"), false);
+                    status.setText("所有节点均超时或不可达，未生成配置");
+                    show("没有可用节点，未生成配置");
+                });
+                return;
+            }
+            try {
+                String yaml = generator.generate(checked.available, options);
+                runOnUiThread(() -> {
+                    nodes = checked.available;
+                    nodesTested = true;
+                    outputInput.setText(yaml);
+                    outputInput.setSelection(0);
+                    if (LocalConfigServer.get().isRunning()) LocalConfigServer.get().update(yaml);
+                    setBusy(false, "配置已生成");
+                    renderParseResult(Collections.emptyList(), false);
+                    String summary = "配置已生成，共 " + nodes.size() + " 个节点";
+                    if (!checked.removed.isEmpty()) summary += "，自动移除 " + checked.removed.size() + " 个超时/不可达节点";
+                    if (!checked.skipped.isEmpty()) summary += "，保留 " + checked.skipped.size() + " 个 UDP 节点待运行时测速";
+                    status.setText(summary);
+                    show(summary);
+                });
+            } catch (IllegalArgumentException error) {
+                runOnUiThread(() -> {
+                    nodes = checked.available;
+                    nodesTested = true;
+                    setBusy(false, message(error));
+                    show(message(error));
+                });
+            }
+        });
     }
 
     private void openFile() {
@@ -550,6 +600,7 @@ public final class MainActivity extends Activity {
         nodePreviewScroll.setVisibility(View.GONE);
         status.setText("等待导入");
         nodes = Collections.emptyList();
+        nodesTested = false;
     }
 
     private String readLimited(InputStream input) throws IOException {
@@ -566,7 +617,8 @@ public final class MainActivity extends Activity {
     }
 
     private void setBusy(boolean busy, String message) {
-        fetchButton.setEnabled(!busy);
+        if (fetchButton != null) fetchButton.setEnabled(!busy);
+        if (generateButton != null) generateButton.setEnabled(!busy);
         progress.setVisibility(busy ? View.VISIBLE : View.GONE);
         status.setText(message);
     }
