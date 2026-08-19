@@ -130,7 +130,7 @@ public final class AdvancedSettingsActivity extends Activity {
         allowLan = new Switch(this);
         allowLan.setText("允许局域网访问");
         content.addView(allowLan, top(4));
-        testUrl = field("策略组测速 URL（默认 https://www.gstatic.com/generate_204）", false, dp(52)); content.addView(testUrl, top(6));
+        testUrl = field("策略组测速 URL", false, dp(52)); content.addView(testUrl, top(6));
         testInterval = field("测速间隔（秒）", false, dp(52)); testInterval.setInputType(InputType.TYPE_CLASS_NUMBER); content.addView(testInterval, top(6));
         ruleBaseUrl = field("远程规则集基础 URL", false, dp(52)); content.addView(ruleBaseUrl, top(6));
         localSharePort = field("局域网导入链接端口（1024-65535）", false, dp(52));
